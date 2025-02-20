@@ -24,6 +24,9 @@ import {
   TableHead,
   TableRow,
   Avatar,
+  useTheme,
+  ThemeProvider,
+  createTheme,
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -33,6 +36,62 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
+
+// Create a custom theme
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#2196f3',
+      light: '#64b5f6',
+      dark: '#1976d2',
+    },
+    secondary: {
+      main: '#f50057',
+      light: '#ff4081',
+      dark: '#c51162',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Segoe UI", "Roboto", "Arial", sans-serif',
+    h4: {
+      fontWeight: 600,
+      letterSpacing: '0.02em',
+    },
+    h6: {
+      fontWeight: 500,
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: 'none',
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+        },
+      },
+    },
+  },
+});
 
 // Quote status constants
 const QUOTE_STATUS = {
@@ -796,343 +855,430 @@ function App() {
   );
 
   return (
-    <Container maxWidth="md">
-      <Box sx={{ my: 4 }}>
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            mb: 3,
-            pb: 2,
-            borderBottom: '1px solid',
-            borderColor: 'grey.300'
-          }}
-        >
-          <Typography variant="h4" component="h1">
-            Quote Approval System
-          </Typography>
-          <Box 
-            sx={{ 
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2
-            }}
-          >
-            {renderStatusChip()}
-            <Tooltip title="View Quote History">
-              <IconButton 
-                onClick={() => setShowHistory(true)}
-                disabled={!currentQuoteId}
-              >
-                <HistoryIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="View Approval Rules">
-              <IconButton onClick={() => setShowRules(true)}>
-                <HelpOutlineIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-
-        {message && (
-          <Alert 
-            severity={message.type} 
-            sx={{ 
-              mb: 2,
-              '& .MuiAlert-message': {
-                width: '100%'
-              }
-            }} 
-            onClose={() => setMessage(null)}
-            icon={message.type === 'success' ? <CheckCircleIcon /> : undefined}
-          >
-            {message.text}
-          </Alert>
-        )}
-
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
-            <FormControl fullWidth variant="outlined">
-              <TextField
-                label="Total Amount *"
-                value={quoteData.total_amount}
-                onChange={(e) => setQuoteData({ ...quoteData, total_amount: e.target.value })}
-                required
-                disabled={!isQuoteEditable}
-                variant="outlined"
-                InputProps={{
-                  readOnly: !isQuoteEditable,
+    <ThemeProvider theme={theme}>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: 'linear-gradient(120deg, #f0f7ff 0%, #ffffff 100%)',
+          py: 4,
+        }}
+      >
+        <Container maxWidth="md">
+          <Box sx={{ mb: 5 }}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 3,
+              }}
+            >
+              <Typography 
+                variant="h4" 
+                component="h1"
+                sx={{
+                  background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
                 }}
-              />
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <TextField
-                label="Discount Percentage"
-                value={quoteData.discount_percentage}
-                onChange={(e) => setQuoteData({ ...quoteData, discount_percentage: e.target.value })}
-                disabled={!isQuoteEditable}
-                variant="outlined"
-                InputProps={{
-                  readOnly: !isQuoteEditable,
-                }}
-              />
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="payment-terms-label">Payment Terms</InputLabel>
-              <Select
-                labelId="payment-terms-label"
-                value={quoteData.payment_terms}
-                onChange={(e) => setQuoteData({ ...quoteData, payment_terms: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Payment Terms"
               >
-                <MenuItem value="Standard">Standard</MenuItem>
-                <MenuItem value="Net 60">Net 60</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="payment-type-label">Payment Type</InputLabel>
-              <Select
-                labelId="payment-type-label"
-                value={quoteData.payment_type}
-                onChange={(e) => setQuoteData({ ...quoteData, payment_type: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Payment Type"
-              >
-                <MenuItem value="Credit">Credit</MenuItem>
-                <MenuItem value="Invoice">Invoice</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="billing-frequency-label">Billing Frequency</InputLabel>
-              <Select
-                labelId="billing-frequency-label"
-                value={quoteData.billing_frequency}
-                onChange={(e) => setQuoteData({ ...quoteData, billing_frequency: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Billing Frequency"
-              >
-                <MenuItem value="Standard">Standard</MenuItem>
-                <MenuItem value="Monthly">Monthly</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="special-terms-label">Special Terms</InputLabel>
-              <Select
-                labelId="special-terms-label"
-                value={quoteData.special_terms}
-                onChange={(e) => setQuoteData({ ...quoteData, special_terms: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Special Terms"
-              >
-                <MenuItem value="None">None</MenuItem>
-                <MenuItem value="Service Terms">Service Terms</MenuItem>
-                <MenuItem value="Non-standard">Non-standard</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="contract-duration-label">Contract Duration</InputLabel>
-              <Select
-                labelId="contract-duration-label"
-                value={quoteData.contract_duration}
-                onChange={(e) => setQuoteData({ ...quoteData, contract_duration: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Contract Duration"
-              >
-                <MenuItem value="Any Duration">Any Duration</MenuItem>
-                <MenuItem value="12-24 Months">12-24 Months</MenuItem>
-                <MenuItem value="Over 24 Months">Over 24 Months</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-
-          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-            {isQuoteEditable && (
-              <Button
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={!quoteData.total_amount}
-                sx={{ bgcolor: 'grey.300', color: 'text.primary' }}
-              >
-                SUBMIT QUOTE
-              </Button>
-            )}
-            {isQuoteSubmitted && (
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleRecall}
-                sx={{ borderColor: 'error.main', color: 'error.main' }}
-              >
-                RECALL QUOTE
-              </Button>
-            )}
-          </Box>
-        </Paper>
-
-        {approvals.length > 0 && (
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              mb: 3 
-            }}>
-              <Typography variant="h6" sx={{ fontWeight: 'medium' }}>
-                Approval Status
+                Quote Approval System
               </Typography>
-              <Tooltip title="View approval rules matrix">
-                <IconButton onClick={() => setShowRules(true)} size="small">
-                  <HelpOutlineIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Box display="flex" flexDirection="column" gap={2}>
-              {approvals.map((approval, index) => {
-                const status = getApprovalStatus(approval.approver_type);
-                const reasons = getApprovalReasons(approval.approver_type);
-                
-                return (
-                  <Paper
-                    key={approval.approver_type}
-                    elevation={1}
+              <Box 
+                sx={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2
+                }}
+              >
+                {renderStatusChip()}
+                <Tooltip title="View Quote History">
+                  <IconButton 
+                    onClick={() => setShowHistory(true)}
+                    disabled={!currentQuoteId}
                     sx={{
-                      p: 2,
-                      border: '1px solid',
-                      borderColor: theme =>
-                        status.text === 'Approved' ? theme.palette.success.light :
-                        status.text === 'Rejected' ? theme.palette.error.light :
-                        theme.palette.grey[300],
-                      borderRadius: 2,
-                      bgcolor: theme =>
-                        status.text === 'Approved' ? alpha(theme.palette.success.main, 0.05) :
-                        status.text === 'Rejected' ? alpha(theme.palette.error.main, 0.05) :
-                        'background.paper'
+                      backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                      },
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                      {/* Left side - Approval info */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                        <Avatar
-                          sx={{
-                            bgcolor: theme => 
-                              status.text === 'Approved' ? theme.palette.success.main :
-                              status.text === 'Rejected' ? theme.palette.error.main :
-                              theme.palette.primary.main,
-                            width: 32,
-                            height: 32,
-                            fontSize: '1rem',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          {index + 1}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 0.5 }}>
-                            {approval.approver_type}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {status.text === 'Approved' && <CheckCircleIcon color="success" fontSize="small" />}
-                            {status.text === 'Rejected' && <CancelIcon color="error" fontSize="small" />}
-                            {status.text === 'Pending' && <WarningIcon color="warning" fontSize="small" />}
-                            <Typography 
-                              variant="body2" 
-                              color={
-                                status.text === 'Approved' ? 'success.main' :
-                                status.text === 'Rejected' ? 'error.main' :
-                                'warning.main'
-                              }
-                              sx={{ fontWeight: 'medium' }}
+                    <HistoryIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="View Approval Rules">
+                  <IconButton 
+                    onClick={() => setShowRules(true)}
+                    sx={{
+                      backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                      },
+                    }}
+                  >
+                    <HelpOutlineIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
+
+            {message && (
+              <Alert 
+                severity={message.type} 
+                sx={{ 
+                  mb: 3,
+                  borderRadius: 2,
+                  '& .MuiAlert-message': {
+                    width: '100%'
+                  }
+                }} 
+                onClose={() => setMessage(null)}
+                icon={message.type === 'success' ? <CheckCircleIcon /> : undefined}
+              >
+                {message.text}
+              </Alert>
+            )}
+
+            <Paper 
+              sx={{ 
+                p: 4, 
+                mb: 4,
+                background: 'linear-gradient(to right bottom, #ffffff, #fafafa)',
+              }}
+            >
+              <Box 
+                display="grid" 
+                gridTemplateColumns="1fr 1fr" 
+                gap={3}
+                sx={{
+                  '& .MuiFormControl-root': {
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                    },
+                  },
+                }}
+              >
+                <FormControl fullWidth variant="outlined">
+                  <TextField
+                    label="Total Amount *"
+                    value={quoteData.total_amount}
+                    onChange={(e) => setQuoteData({ ...quoteData, total_amount: e.target.value })}
+                    required
+                    disabled={!isQuoteEditable}
+                    variant="outlined"
+                    InputProps={{
+                      readOnly: !isQuoteEditable,
+                    }}
+                  />
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <TextField
+                    label="Discount Percentage"
+                    value={quoteData.discount_percentage}
+                    onChange={(e) => setQuoteData({ ...quoteData, discount_percentage: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    variant="outlined"
+                    InputProps={{
+                      readOnly: !isQuoteEditable,
+                    }}
+                  />
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="payment-terms-label">Payment Terms</InputLabel>
+                  <Select
+                    labelId="payment-terms-label"
+                    value={quoteData.payment_terms}
+                    onChange={(e) => setQuoteData({ ...quoteData, payment_terms: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    label="Payment Terms"
+                  >
+                    <MenuItem value="Standard">Standard</MenuItem>
+                    <MenuItem value="Net 60">Net 60</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="payment-type-label">Payment Type</InputLabel>
+                  <Select
+                    labelId="payment-type-label"
+                    value={quoteData.payment_type}
+                    onChange={(e) => setQuoteData({ ...quoteData, payment_type: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    label="Payment Type"
+                  >
+                    <MenuItem value="Credit">Credit</MenuItem>
+                    <MenuItem value="Invoice">Invoice</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="billing-frequency-label">Billing Frequency</InputLabel>
+                  <Select
+                    labelId="billing-frequency-label"
+                    value={quoteData.billing_frequency}
+                    onChange={(e) => setQuoteData({ ...quoteData, billing_frequency: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    label="Billing Frequency"
+                  >
+                    <MenuItem value="Standard">Standard</MenuItem>
+                    <MenuItem value="Monthly">Monthly</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="special-terms-label">Special Terms</InputLabel>
+                  <Select
+                    labelId="special-terms-label"
+                    value={quoteData.special_terms}
+                    onChange={(e) => setQuoteData({ ...quoteData, special_terms: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    label="Special Terms"
+                  >
+                    <MenuItem value="None">None</MenuItem>
+                    <MenuItem value="Service Terms">Service Terms</MenuItem>
+                    <MenuItem value="Non-standard">Non-standard</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="contract-duration-label">Contract Duration</InputLabel>
+                  <Select
+                    labelId="contract-duration-label"
+                    value={quoteData.contract_duration}
+                    onChange={(e) => setQuoteData({ ...quoteData, contract_duration: e.target.value })}
+                    disabled={!isQuoteEditable}
+                    label="Contract Duration"
+                  >
+                    <MenuItem value="Any Duration">Any Duration</MenuItem>
+                    <MenuItem value="12-24 Months">12-24 Months</MenuItem>
+                    <MenuItem value="Over 24 Months">Over 24 Months</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
+                {isQuoteEditable && (
+                  <Button
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={!quoteData.total_amount}
+                    sx={{ 
+                      px: 4,
+                      py: 1.5,
+                      background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)',
+                      boxShadow: '0 3px 10px rgba(33, 150, 243, 0.3)',
+                      '&:hover': {
+                        boxShadow: '0 5px 15px rgba(33, 150, 243, 0.4)',
+                      },
+                    }}
+                  >
+                    SUBMIT QUOTE
+                  </Button>
+                )}
+                {isQuoteSubmitted && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleRecall}
+                    sx={{ 
+                      px: 4,
+                      py: 1.5,
+                      borderWidth: 2,
+                      '&:hover': {
+                        borderWidth: 2,
+                      },
+                    }}
+                  >
+                    RECALL QUOTE
+                  </Button>
+                )}
+              </Box>
+            </Paper>
+
+            {approvals.length > 0 && (
+              <Paper 
+                sx={{ 
+                  p: 4,
+                  background: 'linear-gradient(to right bottom, #ffffff, #fafafa)',
+                }}
+              >
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  mb: 4
+                }}>
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      fontWeight: 'medium',
+                      background: 'linear-gradient(45deg, #1976d2 30%, #2196f3 90%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    Approval Status
+                  </Typography>
+                  <Tooltip title="View approval rules matrix">
+                    <IconButton 
+                      onClick={() => setShowRules(true)} 
+                      size="small"
+                      sx={{
+                        backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                        '&:hover': {
+                          backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                        },
+                      }}
+                    >
+                      <HelpOutlineIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Box display="flex" flexDirection="column" gap={2}>
+                  {approvals.map((approval, index) => {
+                    const status = getApprovalStatus(approval.approver_type);
+                    const reasons = getApprovalReasons(approval.approver_type);
+                    
+                    return (
+                      <Paper
+                        key={approval.approver_type}
+                        elevation={1}
+                        sx={{
+                          p: 2,
+                          border: '1px solid',
+                          borderColor: theme =>
+                            status.text === 'Approved' ? theme.palette.success.light :
+                            status.text === 'Rejected' ? theme.palette.error.light :
+                            theme.palette.grey[300],
+                          borderRadius: 2,
+                          bgcolor: theme =>
+                            status.text === 'Approved' ? alpha(theme.palette.success.main, 0.05) :
+                            status.text === 'Rejected' ? alpha(theme.palette.error.main, 0.05) :
+                            'background.paper'
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                          {/* Left side - Approval info */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                            <Avatar
+                              sx={{
+                                bgcolor: theme => 
+                                  status.text === 'Approved' ? theme.palette.success.main :
+                                  status.text === 'Rejected' ? theme.palette.error.main :
+                                  theme.palette.primary.main,
+                                width: 32,
+                                height: 32,
+                                fontSize: '1rem',
+                                fontWeight: 'bold'
+                              }}
                             >
-                              {status.text}
-                            </Typography>
-                            {status.smartApproval && (
-                              <Chip
-                                label="Auto-retained"
+                              {index + 1}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 0.5 }}>
+                                {approval.approver_type}
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {status.text === 'Approved' && <CheckCircleIcon color="success" fontSize="small" />}
+                                {status.text === 'Rejected' && <CancelIcon color="error" fontSize="small" />}
+                                {status.text === 'Pending' && <WarningIcon color="warning" fontSize="small" />}
+                                <Typography 
+                                  variant="body2" 
+                                  color={
+                                    status.text === 'Approved' ? 'success.main' :
+                                    status.text === 'Rejected' ? 'error.main' :
+                                    'warning.main'
+                                  }
+                                  sx={{ fontWeight: 'medium' }}
+                                >
+                                  {status.text}
+                                </Typography>
+                                {status.smartApproval && (
+                                  <Chip
+                                    label="Auto-retained"
+                                    size="small"
+                                    color="info"
+                                    variant="outlined"
+                                    icon={<HistoryIcon />}
+                                    sx={{ height: 24 }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                          </Box>
+
+                          {/* Right side - Approval actions */}
+                          {status.text === 'Pending' && !status.historical && quoteData.status !== QUOTE_STATUS.REJECTED && (
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Button
                                 size="small"
-                                color="info"
+                                color="success"
+                                variant="contained"
+                                onClick={() => handleApproval(approval.approver_type, 'Approved')}
+                                startIcon={<CheckCircleIcon />}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="small"
+                                color="error"
                                 variant="outlined"
-                                icon={<HistoryIcon />}
-                                sx={{ height: 24 }}
+                                onClick={() => handleApproval(approval.approver_type, 'Rejected')}
+                                startIcon={<CancelIcon />}
+                              >
+                                Reject
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* Approval reasons */}
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 'medium' }}>
+                            Required because:
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {reasons.map((rule, idx) => (
+                              <Chip
+                                key={idx}
+                                label={
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <Typography variant="caption">
+                                      {rule.field}: {rule.condition}
+                                    </Typography>
+                                  </Box>
+                                }
+                                size="small"
+                                variant="outlined"
+                                color={rule.smart ? "info" : "default"}
+                                sx={{ 
+                                  borderStyle: rule.smart ? 'dashed' : 'solid',
+                                  '& .MuiChip-label': {
+                                    px: 1
+                                  }
+                                }}
                               />
-                            )}
+                            ))}
                           </Box>
                         </Box>
-                      </Box>
-
-                      {/* Right side - Approval actions */}
-                      {status.text === 'Pending' && !status.historical && quoteData.status !== QUOTE_STATUS.REJECTED && (
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button
-                            size="small"
-                            color="success"
-                            variant="contained"
-                            onClick={() => handleApproval(approval.approver_type, 'Approved')}
-                            startIcon={<CheckCircleIcon />}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                            onClick={() => handleApproval(approval.approver_type, 'Rejected')}
-                            startIcon={<CancelIcon />}
-                          >
-                            Reject
-                          </Button>
-                        </Box>
-                      )}
-                    </Box>
-
-                    {/* Approval reasons */}
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 'medium' }}>
-                        Required because:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {reasons.map((rule, idx) => (
-                          <Chip
-                            key={idx}
-                            label={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Typography variant="caption">
-                                  {rule.field}: {rule.condition}
-                                </Typography>
-                              </Box>
-                            }
-                            size="small"
-                            variant="outlined"
-                            color={rule.smart ? "info" : "default"}
-                            sx={{ 
-                              borderStyle: rule.smart ? 'dashed' : 'solid',
-                              '& .MuiChip-label': {
-                                px: 1
-                              }
-                            }}
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  </Paper>
-                );
-              })}
-            </Box>
-          </Paper>
-        )}
+                      </Paper>
+                    );
+                  })}
+                </Box>
+              </Paper>
+            )}
+          </Box>
+          
+          <ApprovalMatrix open={showRules} onClose={() => setShowRules(false)} />
+          <QuoteHistoryDialog open={showHistory} onClose={() => setShowHistory(false)} />
+        </Container>
       </Box>
-      
-      <ApprovalMatrix open={showRules} onClose={() => setShowRules(false)} />
-      <QuoteHistoryDialog open={showHistory} onClose={() => setShowHistory(false)} />
-    </Container>
+    </ThemeProvider>
   );
 }
 
