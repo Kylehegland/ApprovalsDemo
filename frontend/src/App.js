@@ -32,6 +32,7 @@ import {
   HelpOutline as HelpOutlineIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 
 // Quote status constants
 const QUOTE_STATUS = {
@@ -50,10 +51,7 @@ function App() {
     payment_type: 'Credit',
     billing_frequency: 'Standard',
     special_terms: 'None',
-    product_service: 'Product',
     contract_duration: 'Any Duration',
-    discount_type: 'Standard',
-    region_territory: 'Domestic',
     status: QUOTE_STATUS.DRAFT
   });
   
@@ -74,10 +72,13 @@ function App() {
     { field: 'Discount Percentage', condition: '20% - 30%', approver: 'Deal Desk', smart: true },
     { field: 'Discount Percentage', condition: '>30%', approver: 'Finance', smart: true },
     { field: 'Discount Percentage', condition: '>40%', approver: 'Legal', smart: true },
-    { field: 'Product vs. Service', condition: 'Service', approver: 'Services', smart: false },
     { field: 'Special Terms', condition: 'Service Terms', approver: 'Services', smart: false },
     { field: 'Special Terms', condition: 'Non-standard', approver: 'Legal', smart: false },
-    // ... other rules
+    { field: 'Payment Terms', condition: 'Net 60', approver: 'Finance', smart: true },
+    { field: 'Payment Type', condition: 'Invoice', approver: 'Finance', smart: false },
+    { field: 'Billing Frequency', condition: 'Monthly', approver: 'Finance', smart: false },
+    { field: 'Contract Duration', condition: '12-24 Months', approver: 'Deal Desk', smart: true },
+    { field: 'Contract Duration', condition: '>24 Months', approver: 'Legal', smart: true }
   ];
 
   useEffect(() => {
@@ -446,30 +447,114 @@ function App() {
     return status;
   };
 
+  const getApprovalReasons = (approverType) => {
+    // Get all rules that triggered this approver
+    const matchingRules = APPROVAL_RULES.filter(rule => {
+      const fieldValue = quoteData[rule.field.toLowerCase().replace(/\s+/g, '_')];
+      const condition = rule.condition;
+      
+      // Handle numeric conditions
+      if (condition.includes('$') || condition.includes('%')) {
+        const value = parseFloat(fieldValue);
+        const threshold = parseFloat(condition.replace(/[^0-9.-]/g, ''));
+        
+        if (condition.includes('-')) {
+          // Range check (e.g., "20% - 30%")
+          const [min, max] = condition.replace(/[^0-9.-]/g, '').split('-').map(Number);
+          return value >= min && value <= max && rule.approver === approverType;
+        } else {
+          // Threshold check (e.g., ">$10,000")
+          return value > threshold && rule.approver === approverType;
+        }
+      }
+      
+      // Direct value match
+      return fieldValue === condition && rule.approver === approverType;
+    });
+
+    return matchingRules;
+  };
+
   const renderApprovalChip = (approverType) => {
     const status = getApprovalStatus(approverType);
     if (!status) return null;
 
+    const reasons = getApprovalReasons(approverType);
+    
     return (
       <Box display="flex" alignItems="center" gap={1}>
-        <Chip
-          label={`${approverType} (${status.text})`}
-          color={status.color}
-          icon={status.retained || status.smartApproval ? <HistoryIcon /> : undefined}
-          sx={{
-            ...(status.historical && {
-              opacity: 0.7,
-              '& .MuiChip-label': {
-                fontStyle: 'italic'
-              }
-            }),
-            ...(status.smartApproval && {
-              '& .MuiChip-icon': {
-                color: 'info.main'
-              }
-            })
-          }}
-        />
+        <Box sx={{ flex: 1 }}>
+          <Tooltip
+            title={
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Required because:
+                </Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {reasons.map((rule, index) => (
+                    <Box component="li" key={index} sx={{ mb: 0.5 }}>
+                      <Typography variant="body2">
+                        {rule.field}: {rule.condition}
+                        {rule.smart && (
+                          <Chip 
+                            label="Smart Rule" 
+                            size="small" 
+                            color="info" 
+                            variant="outlined"
+                            sx={{ ml: 1, height: 16, '& .MuiChip-label': { px: 1, py: 0 } }}
+                          />
+                        )}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            }
+            arrow
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip
+                label={`${approverType} (${status.text})`}
+                color={status.color}
+                icon={status.retained || status.smartApproval ? <HistoryIcon /> : undefined}
+                sx={{
+                  ...(status.historical && {
+                    opacity: 0.7,
+                    '& .MuiChip-label': {
+                      fontStyle: 'italic'
+                    }
+                  }),
+                  ...(status.smartApproval && {
+                    '& .MuiChip-icon': {
+                      color: 'info.main'
+                    }
+                  })
+                }}
+              />
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start',
+                ml: 1
+              }}>
+                {reasons.map((rule, index) => (
+                  <Typography 
+                    key={index} 
+                    variant="caption" 
+                    color="text.secondary"
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      gap: 0.5
+                    }}
+                  >
+                    • {rule.field}: {rule.condition}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          </Tooltip>
+        </Box>
         {status.text === 'Pending' && !status.historical && quoteData.status !== QUOTE_STATUS.REJECTED && (
           <>
             <Button
@@ -833,20 +918,6 @@ function App() {
             </FormControl>
 
             <FormControl fullWidth variant="outlined">
-              <InputLabel id="product-service-label">Product vs. Service</InputLabel>
-              <Select
-                labelId="product-service-label"
-                value={quoteData.product_service}
-                onChange={(e) => setQuoteData({ ...quoteData, product_service: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Product vs. Service"
-              >
-                <MenuItem value="Product">Product</MenuItem>
-                <MenuItem value="Service">Service</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
               <InputLabel id="contract-duration-label">Contract Duration</InputLabel>
               <Select
                 labelId="contract-duration-label"
@@ -858,34 +929,6 @@ function App() {
                 <MenuItem value="Any Duration">Any Duration</MenuItem>
                 <MenuItem value="12-24 Months">12-24 Months</MenuItem>
                 <MenuItem value="Over 24 Months">Over 24 Months</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="discount-type-label">Discount Type</InputLabel>
-              <Select
-                labelId="discount-type-label"
-                value={quoteData.discount_type}
-                onChange={(e) => setQuoteData({ ...quoteData, discount_type: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Discount Type"
-              >
-                <MenuItem value="Standard">Standard</MenuItem>
-                <MenuItem value="Non-standard">Non-standard</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth variant="outlined">
-              <InputLabel id="region-territory-label">Region/Territory</InputLabel>
-              <Select
-                labelId="region-territory-label"
-                value={quoteData.region_territory}
-                onChange={(e) => setQuoteData({ ...quoteData, region_territory: e.target.value })}
-                disabled={!isQuoteEditable}
-                label="Region/Territory"
-              >
-                <MenuItem value="Domestic">Domestic</MenuItem>
-                <MenuItem value="International">International</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -916,25 +959,151 @@ function App() {
 
         {approvals.length > 0 && (
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Approval Status
-            </Typography>
-            <Box display="flex" flexDirection="column" gap={1}>
-              {approvals.map((approval, index) => (
-                <Box key={approval.approver_type} display="flex" alignItems="center" gap={1}>
-                  <Avatar 
-                    sx={{ 
-                      bgcolor: 'primary.main',
-                      width: 24,
-                      height: 24,
-                      fontSize: '0.875rem'
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              mb: 3 
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 'medium' }}>
+                Approval Status
+              </Typography>
+              <Tooltip title="View approval rules matrix">
+                <IconButton onClick={() => setShowRules(true)} size="small">
+                  <HelpOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Box display="flex" flexDirection="column" gap={2}>
+              {approvals.map((approval, index) => {
+                const status = getApprovalStatus(approval.approver_type);
+                const reasons = getApprovalReasons(approval.approver_type);
+                
+                return (
+                  <Paper
+                    key={approval.approver_type}
+                    elevation={1}
+                    sx={{
+                      p: 2,
+                      border: '1px solid',
+                      borderColor: theme =>
+                        status.text === 'Approved' ? theme.palette.success.light :
+                        status.text === 'Rejected' ? theme.palette.error.light :
+                        theme.palette.grey[300],
+                      borderRadius: 2,
+                      bgcolor: theme =>
+                        status.text === 'Approved' ? alpha(theme.palette.success.main, 0.05) :
+                        status.text === 'Rejected' ? alpha(theme.palette.error.main, 0.05) :
+                        'background.paper'
                     }}
                   >
-                    {index + 1}
-                  </Avatar>
-                  {renderApprovalChip(approval.approver_type)}
-                </Box>
-              ))}
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                      {/* Left side - Approval info */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: theme => 
+                              status.text === 'Approved' ? theme.palette.success.main :
+                              status.text === 'Rejected' ? theme.palette.error.main :
+                              theme.palette.primary.main,
+                            width: 32,
+                            height: 32,
+                            fontSize: '1rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {index + 1}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 0.5 }}>
+                            {approval.approver_type}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {status.text === 'Approved' && <CheckCircleIcon color="success" fontSize="small" />}
+                            {status.text === 'Rejected' && <CancelIcon color="error" fontSize="small" />}
+                            {status.text === 'Pending' && <WarningIcon color="warning" fontSize="small" />}
+                            <Typography 
+                              variant="body2" 
+                              color={
+                                status.text === 'Approved' ? 'success.main' :
+                                status.text === 'Rejected' ? 'error.main' :
+                                'warning.main'
+                              }
+                              sx={{ fontWeight: 'medium' }}
+                            >
+                              {status.text}
+                            </Typography>
+                            {status.smartApproval && (
+                              <Chip
+                                label="Auto-retained"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                icon={<HistoryIcon />}
+                                sx={{ height: 24 }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+
+                      {/* Right side - Approval actions */}
+                      {status.text === 'Pending' && !status.historical && quoteData.status !== QUOTE_STATUS.REJECTED && (
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Button
+                            size="small"
+                            color="success"
+                            variant="contained"
+                            onClick={() => handleApproval(approval.approver_type, 'Approved')}
+                            startIcon={<CheckCircleIcon />}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            onClick={() => handleApproval(approval.approver_type, 'Rejected')}
+                            startIcon={<CancelIcon />}
+                          >
+                            Reject
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+
+                    {/* Approval reasons */}
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 'medium' }}>
+                        Required because:
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {reasons.map((rule, idx) => (
+                          <Chip
+                            key={idx}
+                            label={
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption">
+                                  {rule.field}: {rule.condition}
+                                </Typography>
+                              </Box>
+                            }
+                            size="small"
+                            variant="outlined"
+                            color={rule.smart ? "info" : "default"}
+                            sx={{ 
+                              borderStyle: rule.smart ? 'dashed' : 'solid',
+                              '& .MuiChip-label': {
+                                px: 1
+                              }
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  </Paper>
+                );
+              })}
             </Box>
           </Paper>
         )}

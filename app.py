@@ -34,10 +34,6 @@ def determine_required_approvals(quote_data):
     # Manager is always required first
     needed_approvals.append('Manager')
     
-    # Product vs Service checks - Services must approve after Manager if it's a service
-    if quote_data.get('product_service') == 'Service':
-        needed_approvals.append('Services')
-    
     # Total Amount checks
     amount = float(quote_data['total_amount'])
     if amount > 10000:
@@ -58,7 +54,7 @@ def determine_required_approvals(quote_data):
             needed_approvals.append('Legal')
     
     # Payment Terms checks
-    if quote_data.get('payment_terms') == '>Net 60':
+    if quote_data.get('payment_terms') == 'Net 60':
         needed_approvals.append('Finance')
     
     # Payment Type checks
@@ -83,14 +79,6 @@ def determine_required_approvals(quote_data):
     elif duration == '>24 Months':
         needed_approvals.append('Legal')
     
-    # Discount Type checks
-    if quote_data.get('discount_type') == 'Non-standard':
-        needed_approvals.append('Deal Desk')
-    
-    # Region/Territory checks
-    if quote_data.get('region_territory') == 'International':
-        needed_approvals.append('Legal')
-    
     # Remove duplicates while maintaining order
     seen = set()
     ordered_approvals = []
@@ -112,7 +100,7 @@ def is_value_more_desirable(old_value, new_value, field_name):
         # Shorter terms/duration is more desirable
         term_order = {
             'Standard': 1,
-            '>Net 60': 2,
+            'Net 60': 2,
             '>Net 90': 3,
             'Any Duration': 1,
             '12-24 Months': 2,
