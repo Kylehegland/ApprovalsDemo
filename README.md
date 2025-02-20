@@ -1,83 +1,89 @@
-# Quote Approval System
+# Quote Approval System Demo
 
-A web application for managing quote approvals with dynamic approval workflows based on various conditions.
+A demonstration of a quote approval workflow system with smart approval retention.
 
 ## Features
 
-- Dynamic form for quote submission
-- Real-time approval requirements calculation
-- Multi-level approval workflow
-- Quote recall functionality
-- Modern Material-UI interface
+- Multi-level approval workflow (Manager, Services, Deal Desk, Finance, Legal)
+- Smart approval retention based on favorable changes
+- Real-time status updates
+- Quote history tracking
+- Approval rules matrix
+- Support for various quote attributes (amount, discount, terms, etc.)
 
-## Prerequisites
+## Project Structure
 
-- Python 3.11 or 3.12 (Python 3.13 is not supported yet)
-- Node.js 14 or higher
-- npm or yarn package manager
+- `/frontend` - React frontend application
+- `app.py` - Flask backend server
+- `db.json` - TinyDB database file (auto-generated)
 
 ## Setup
 
-1. Clone the repository
-2. Set up the backend:
-   ```bash
-   # Create and activate a virtual environment (recommended)
-   python -m venv venv
-   # On Windows:
-   .\venv\Scripts\activate
-   # On Unix/MacOS:
-   source venv/bin/activate
+### Backend (Python/Flask)
 
-   # Install dependencies
-   pip install -r requirements.txt
-   python app.py
-   ```
+1. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-3. Set up the frontend:
-   ```bash
-   npm install
-   npm start
-   ```
+2. Install dependencies:
+```bash
+pip install flask flask-cors tinydb
+```
 
-The backend will run on http://localhost:5000 and the frontend will run on http://localhost:3000.
+3. Run the server:
+```bash
+python app.py
+```
 
-## Usage
+### Frontend (React)
 
-1. Fill out the quote form with the required information
-2. Submit the quote to see the required approvals
-3. Each approver can approve or reject the quote
-4. Quotes can be recalled if changes are needed
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
 
-## Approval Logic
+2. Install dependencies:
+```bash
+npm install
+```
 
-The system implements the following approval requirements:
+3. Start the development server:
+```bash
+npm start
+```
 
-### Total Amount
-- Manager: Required for any amount
-- Deal Desk: Required for amounts > $10,000
-- Finance: Required for amounts > $50,000
-- Legal: Required for amounts > $100,000
+The application will be available at `http://localhost:3000`
 
-### Discount Percentage
-- Manager: Required for any discount
-- Deal Desk: Required for 20-30% discount
-- Finance: Required for >30% discount
-- Legal: Required for >40% discount
+## Approval Rules
 
-### Payment Terms
-- Manager: Standard terms
-- Finance: Required for terms >Net 60
-- Legal: Required for terms >Net 90
+- Manager approval is always required first
+- Services team approval is required for:
+  - Service products
+  - Service-related special terms
+- Deal Desk approval is required for:
+  - Amounts > $10,000
+  - Discounts 20-30%
+  - Non-standard discount types
+  - Contract duration 12-24 months
+- Finance approval is required for:
+  - Amounts > $50,000
+  - Discounts > 30%
+  - Payment terms > Net 60
+  - Invoice payment type
+  - Monthly billing frequency
+- Legal approval is required for:
+  - Amounts > $100,000
+  - Discounts > 40%
+  - Non-standard special terms
+  - Contract duration > 24 months
+  - International territory
 
-And more conditions as specified in the approval matrix.
+## Smart Approval Retention
 
-## Troubleshooting
-
-If you encounter errors when running the application:
-1. Make sure you're using Python 3.11 or 3.12 (not 3.13)
-2. Use a virtual environment to avoid conflicts with system packages
-3. Make sure all dependencies are installed correctly
-
-## License
-
-MIT 
+The system automatically retains previous approvals when changes are more favorable:
+- Lower discount percentages
+- Higher total amounts
+- Shorter payment terms
+- Shorter contract durations 

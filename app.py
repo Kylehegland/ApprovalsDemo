@@ -3,101 +3,111 @@ from flask_cors import CORS
 from datetime import datetime
 from tinydb import TinyDB, Query
 import os
+import json
 
 app = Flask(__name__)
 CORS(app)
 
 # Initialize TinyDB
-db = TinyDB('db.json')
+DB_PATH = 'db.json'
+
+# Create db.json if it doesn't exist or is corrupted
+try:
+    with open(DB_PATH, 'r') as f:
+        json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    with open(DB_PATH, 'w') as f:
+        json.dump({'_default': {}}, f)
+
+db = TinyDB(DB_PATH)
 quotes = db.table('quotes')
 approvals = db.table('approvals')
 Quote = Query()
 Approval = Query()
 
-# Clear existing data to reset schema
-quotes.truncate()
-approvals.truncate()
-
-# No need to define schema in TinyDB as it's schemaless
-# The previous_approval_id will be added automatically when we use it
-
 def determine_required_approvals(quote_data):
-    # Initialize sets for each approver type
-    required_approvers = {
-        'Manager': False,
-        'Services': False,
-        'Deal Desk': False,
-        'Finance': False,
-        'Legal': False
-    }
+    # Define the approval order - this ensures approvals happen in sequence
+    APPROVAL_ORDER = ['Manager', 'Services', 'Deal Desk', 'Finance', 'Legal']
     
-    # Manager is always required - blanket rule
-    required_approvers['Manager'] = True
+    needed_approvals = []
     
-    # Total Amount check - only Finance for >100k (not smart)
+    # Manager is always required first
+    needed_approvals.append('Manager')
+    
+    # Product vs Service checks - Services must approve after Manager if it's a service
+    if quote_data.get('product_service') == 'Service':
+        needed_approvals.append('Services')
+    
+    # Total Amount checks
     amount = float(quote_data['total_amount'])
+    if amount > 10000:
+        needed_approvals.append('Deal Desk')
+    if amount > 50000:
+        needed_approvals.append('Finance')
     if amount > 100000:
-        required_approvers['Finance'] = True
+        needed_approvals.append('Legal')
     
     # Discount Percentage checks
     if 'discount_percentage' in quote_data and quote_data['discount_percentage']:
         discount = float(quote_data['discount_percentage'])
         if 20 <= discount <= 30:
-            required_approvers['Deal Desk'] = True
+            needed_approvals.append('Deal Desk')
         if discount > 30:
-            required_approvers['Finance'] = True
+            needed_approvals.append('Finance')
         if discount > 40:
-            required_approvers['Legal'] = True
+            needed_approvals.append('Legal')
     
     # Payment Terms checks
     if quote_data.get('payment_terms') == '>Net 60':
-        required_approvers['Finance'] = True
+        needed_approvals.append('Finance')
     
     # Payment Type checks
     if quote_data.get('payment_type') == 'Invoice':
-        required_approvers['Finance'] = True
+        needed_approvals.append('Finance')
     
     # Billing Frequency checks
     if quote_data.get('billing_frequency') == 'Monthly':
-        required_approvers['Finance'] = True
+        needed_approvals.append('Finance')
     
     # Special Terms checks
     special_terms = quote_data.get('special_terms')
     if special_terms == 'Service Terms':
-        required_approvers['Services'] = True
+        needed_approvals.append('Services')
     elif special_terms == 'Non-standard':
-        required_approvers['Legal'] = True
-    
-    # Product vs Service checks
-    if quote_data.get('product_service') == 'Service':
-        required_approvers['Services'] = True
+        needed_approvals.append('Legal')
     
     # Contract Duration checks
     duration = quote_data.get('contract_duration')
     if duration == '12-24 Months':
-        required_approvers['Deal Desk'] = True
+        needed_approvals.append('Deal Desk')
     elif duration == '>24 Months':
-        required_approvers['Legal'] = True
+        needed_approvals.append('Legal')
     
     # Discount Type checks
     if quote_data.get('discount_type') == 'Non-standard':
-        required_approvers['Deal Desk'] = True
+        needed_approvals.append('Deal Desk')
     
     # Region/Territory checks
     if quote_data.get('region_territory') == 'International':
-        required_approvers['Legal'] = True
+        needed_approvals.append('Legal')
     
-    # Return approvers in the specified order, only if they are required
-    ordered_approvers = ['Manager', 'Services', 'Deal Desk', 'Finance', 'Legal']
-    return [approver for approver in ordered_approvers if required_approvers[approver]]
+    # Remove duplicates while maintaining order
+    seen = set()
+    ordered_approvals = []
+    for approver in APPROVAL_ORDER:
+        if approver in needed_approvals and approver not in seen:
+            ordered_approvals.append(approver)
+            seen.add(approver)
+    
+    return ordered_approvals
 
 def is_value_more_desirable(old_value, new_value, field_name):
     if field_name == 'discount_percentage':
         # Lower discount is more desirable
         return float(new_value or 0) <= float(old_value or 0)
     elif field_name == 'total_amount':
-        # Lower amount is more desirable
-        return float(new_value) <= float(old_value)
+        # Higher amount is more desirable for the company
+        return float(new_value) >= float(old_value)
     elif field_name in ['payment_terms', 'contract_duration']:
         # Shorter terms/duration is more desirable
         term_order = {
@@ -118,92 +128,100 @@ def should_keep_approval(old_quote, new_quote, approver_type):
         # Manager always needs to re-approve
         return False
         
-    # For each approver, check if any of their relevant fields have changed unfavorably
+    # Check each field that affects this approver
     if approver_type == 'Deal Desk':
-        # Check discount percentage
+        amount_threshold = 10000
+        discount_threshold = 20
+        
+        # Check if either old or new quote requires Deal Desk approval for amount
+        old_needs_amount_approval = float(old_quote['total_amount']) > amount_threshold
+        new_needs_amount_approval = float(new_quote['total_amount']) > amount_threshold
+        
+        # If both need approval, check if new value is more favorable
+        if old_needs_amount_approval and new_needs_amount_approval:
+            if not is_value_more_desirable(old_quote['total_amount'], new_quote['total_amount'], 'total_amount'):
+                return False
+        # If only new quote needs approval, require new approval
+        elif new_needs_amount_approval:
+            return False
+            
+        # Similar logic for discount
         old_discount = float(old_quote.get('discount_percentage') or 0)
         new_discount = float(new_quote.get('discount_percentage') or 0)
-        if 20 <= old_discount <= 30 and 20 <= new_discount <= 30:
-            if new_discount > old_discount:  # Less favorable
+        
+        # Check if either old or new quote requires Deal Desk approval for discount
+        old_needs_discount_approval = old_discount >= discount_threshold
+        new_needs_discount_approval = new_discount >= discount_threshold
+        
+        # If old quote needed approval and new quote has a more favorable discount, keep the approval
+        if old_needs_discount_approval:
+            if new_discount <= old_discount:  # New discount is lower or equal (more favorable)
+                return True
+            else:  # New discount is higher (less favorable)
                 return False
-        elif 20 <= new_discount <= 30 and old_discount < 20:
+        # If new quote needs approval but old didn't, require new approval
+        elif new_needs_discount_approval:
             return False
-            
-        # Check contract duration
-        if old_quote.get('contract_duration') == '12-24 Months':
-            if new_quote.get('contract_duration') != old_quote.get('contract_duration'):
-                return False
-                
-        # Check discount type
-        if new_quote.get('discount_type') == 'Non-standard' and old_quote.get('discount_type') != 'Non-standard':
-            return False
-            
-        # If none of the Deal Desk's fields changed unfavorably, keep the approval
-        return True
                 
     elif approver_type == 'Finance':
-        # Amount over 100k is not a smart rule, always needs re-approval
-        new_amount = float(new_quote['total_amount'])
-        if new_amount > 100000:
+        amount_threshold = 50000
+        discount_threshold = 30
+        
+        old_needs_amount_approval = float(old_quote['total_amount']) > amount_threshold
+        new_needs_amount_approval = float(new_quote['total_amount']) > amount_threshold
+        
+        if old_needs_amount_approval and new_needs_amount_approval:
+            if not is_value_more_desirable(old_quote['total_amount'], new_quote['total_amount'], 'total_amount'):
+                return False
+        elif new_needs_amount_approval:
             return False
             
-        # Check discount percentage
         old_discount = float(old_quote.get('discount_percentage') or 0)
         new_discount = float(new_quote.get('discount_percentage') or 0)
-        if old_discount > 30 and new_discount > 30:
-            if new_discount > old_discount:  # Less favorable
+        
+        # Check if either old or new quote requires Finance approval for discount
+        old_needs_discount_approval = old_discount >= discount_threshold
+        new_needs_discount_approval = new_discount >= discount_threshold
+        
+        # If old quote needed approval and new quote has a more favorable discount, keep the approval
+        if old_needs_discount_approval:
+            if new_discount <= old_discount:  # New discount is lower or equal (more favorable)
+                return True
+            else:  # New discount is higher (less favorable)
                 return False
-        elif new_discount > 30 and old_discount <= 30:
+        # If new quote needs approval but old didn't, require new approval
+        elif new_needs_discount_approval:
             return False
-            
-        # Check payment terms
-        if new_quote.get('payment_terms') == '>Net 60' and old_quote.get('payment_terms') != '>Net 60':
-            return False
-            
-        # Check payment type
-        if new_quote.get('payment_type') == 'Invoice' and old_quote.get('payment_type') != 'Invoice':
-            return False
-            
-        # Check billing frequency
-        if new_quote.get('billing_frequency') == 'Monthly' and old_quote.get('billing_frequency') != 'Monthly':
-            return False
-            
-        # If none of Finance's fields changed unfavorably, keep the approval
-        return True
                 
     elif approver_type == 'Legal':
-        # Check discount percentage
+        amount_threshold = 100000
+        discount_threshold = 40
+        
+        old_needs_amount_approval = float(old_quote['total_amount']) > amount_threshold
+        new_needs_amount_approval = float(new_quote['total_amount']) > amount_threshold
+        
+        if old_needs_amount_approval and new_needs_amount_approval:
+            if not is_value_more_desirable(old_quote['total_amount'], new_quote['total_amount'], 'total_amount'):
+                return False
+        elif new_needs_amount_approval:
+            return False
+            
         old_discount = float(old_quote.get('discount_percentage') or 0)
         new_discount = float(new_quote.get('discount_percentage') or 0)
-        if old_discount > 40 and new_discount > 40:
-            if new_discount > old_discount:  # Less favorable
-                return False
-        elif new_discount > 40 and old_discount <= 40:
-            return False
-            
-        # Check contract duration
-        if new_quote.get('contract_duration') == '>24 Months' and old_quote.get('contract_duration') != '>24 Months':
-            return False
-            
-        # Check special terms
-        if new_quote.get('special_terms') == 'Non-standard' and old_quote.get('special_terms') != 'Non-standard':
-            return False
-            
-        # Check region/territory
-        if new_quote.get('region_territory') == 'International' and old_quote.get('region_territory') != 'International':
-            return False
-            
-        # If none of Legal's fields changed unfavorably, keep the approval
-        return True
         
-    elif approver_type == 'Services':
-        # Check if any Services-specific fields have changed
-        if (new_quote.get('special_terms') == 'Service Terms' and old_quote.get('special_terms') != 'Service Terms') or \
-           (new_quote.get('product_service') == 'Service' and old_quote.get('product_service') != 'Service'):
+        # Check if either old or new quote requires Legal approval for discount
+        old_needs_discount_approval = old_discount >= discount_threshold
+        new_needs_discount_approval = new_discount >= discount_threshold
+        
+        # If old quote needed approval and new quote has a more favorable discount, keep the approval
+        if old_needs_discount_approval:
+            if new_discount <= old_discount:  # New discount is lower or equal (more favorable)
+                return True
+            else:  # New discount is higher (less favorable)
+                return False
+        # If new quote needs approval but old didn't, require new approval
+        elif new_needs_discount_approval:
             return False
-            
-        # If none of Services' fields changed, keep the approval
-        return True
     
     return True
 
@@ -211,8 +229,6 @@ def should_keep_approval(old_quote, new_quote, approver_type):
 def create_quote():
     data = request.json
     previous_quote_id = data.pop('previous_quote_id', None)
-    
-    print(f"Creating quote with previous_quote_id: {previous_quote_id}")
     
     # Add metadata
     data['created_at'] = datetime.now().isoformat()
@@ -228,36 +244,29 @@ def create_quote():
     previous_quote = None
     if previous_quote_id:
         previous_quote = quotes.get(doc_id=int(previous_quote_id))
-        if previous_quote:
-            previous_approvals = approvals.search(Approval.quote_id == int(previous_quote_id))
-            print(f"Found previous quote: {previous_quote}")
-            print(f"Found previous approvals: {previous_approvals}")
+        # Get all previous approvals, including historical ones
+        previous_approvals = approvals.search(Approval.quote_id == int(previous_quote_id))
     
     # Create approval records
     required_approvals = determine_required_approvals(data)
-    print(f"Required approvals for new quote: {required_approvals}")
-    
     for approver_type in required_approvals:
         approval_data = {
             'quote_id': quote_id,
             'approver_type': approver_type,
             'status': 'Pending',
-            'updated_at': datetime.now().isoformat()
+            'updated_at': datetime.now().isoformat(),
+            'historical': False
         }
         
         # Check if we can keep the previous approval
         if previous_quote and previous_approvals:
             prev_approval = next((a for a in previous_approvals if a['approver_type'] == approver_type), None)
-            if prev_approval:
-                print(f"Found previous approval for {approver_type}: {prev_approval}")
-                should_keep = should_keep_approval(previous_quote, data, approver_type)
-                print(f"Should keep {approver_type} approval? {should_keep}")
-                # Check the original_status if it exists, otherwise fall back to status
-                was_approved = prev_approval.get('original_status', prev_approval['status']) == 'Approved'
-                if was_approved and should_keep:
-                    print(f"Keeping approval for {approver_type}")
-                    approval_data['status'] = 'Approved'
-                    approval_data['previous_approval_id'] = prev_approval.doc_id
+            if (prev_approval and 
+                prev_approval['status'] == 'Approved' and 
+                should_keep_approval(previous_quote, data, approver_type)):
+                approval_data['status'] = 'Approved'
+                approval_data['previous_approval_id'] = prev_approval.doc_id
+                approval_data['smart_approval'] = True  # Flag to indicate this was a smart approval
         
         approvals.insert(approval_data)
     
@@ -279,6 +288,30 @@ def get_quote(quote_id):
 def update_approval(quote_id):
     data = request.json
     
+    # Get the quote and all its approvals
+    quote = quotes.get(doc_id=quote_id)
+    if not quote:
+        return jsonify({'message': 'Quote not found'}), 404
+    
+    quote_approvals = approvals.search(Approval.quote_id == quote_id)
+    required_approvals = determine_required_approvals(quote)
+    
+    # Find the index of the current approver in the required sequence
+    try:
+        current_approver_index = required_approvals.index(data['approver_type'])
+    except ValueError:
+        return jsonify({'message': 'Invalid approver type'}), 400
+    
+    # Check if all previous approvers have approved
+    for i in range(current_approver_index):
+        previous_approver = required_approvals[i]
+        previous_approval = next((a for a in quote_approvals if a['approver_type'] == previous_approver), None)
+        if not previous_approval or previous_approval['status'] != 'Approved':
+            return jsonify({
+                'message': f'Cannot approve. Waiting for {previous_approver} approval first.',
+                'required_sequence': required_approvals
+            }), 400
+    
     # Find and update the approval
     approval = approvals.get(
         (Approval.quote_id == quote_id) & 
@@ -287,35 +320,44 @@ def update_approval(quote_id):
     
     if not approval:
         return jsonify({'message': 'Approval not found'}), 404
-
-    # Get all approvals for this quote
-    quote_approvals = approvals.search(Approval.quote_id == quote_id)
     
-    # Define the approval order
-    approval_order = ['Manager', 'Services', 'Deal Desk', 'Finance', 'Legal']
+    # If this is a rejection, update the quote status and mark approvals as historical
+    if data['status'] == 'Rejected':
+        # Update quote status to Rejected
+        quotes.update({'status': 'Rejected'}, doc_ids=[quote_id])
+        
+        # Mark all existing approvals as historical
+        quote_approvals = approvals.search(Approval.quote_id == quote_id)
+        for approval in quote_approvals:
+            approvals.update({
+                'historical': True,
+                'updated_at': datetime.now().isoformat()
+            }, doc_ids=[approval.doc_id])
+        
+        return jsonify({
+            'message': 'Quote rejected. You can make changes and submit again.',
+            'status': 'Rejected'
+        })
     
-    # Get the index of the current approver
-    current_approver_index = approval_order.index(data['approver_type'])
-    
-    # Check if all previous approvers have approved
-    for prev_approver in approval_order[:current_approver_index]:
-        prev_approval = next((a for a in quote_approvals if a['approver_type'] == prev_approver), None)
-        if prev_approval and prev_approval['status'] != 'Approved':
-            return jsonify({
-                'message': f'Cannot approve. {prev_approver} must approve first.',
-                'error': 'INVALID_APPROVAL_ORDER'
-            }), 400
-    
-    # If all checks pass, update the approval
-    update_data = {
+    # Update the approval status
+    approvals.update({
         'status': data['status'],
-        'updated_at': datetime.now().isoformat(),
-        'original_status': data['status']  # Store the actual approval status
-    }
+        'updated_at': datetime.now().isoformat()
+    }, doc_ids=[approval.doc_id])
     
-    approvals.update(update_data, doc_ids=[approval.doc_id])
+    # If all approvals are complete and approved, update quote status
+    all_approvals = approvals.search(Approval.quote_id == quote_id)
+    if all(a['status'] == 'Approved' for a in all_approvals):
+        quotes.update({'status': 'Approved'}, doc_ids=[quote_id])
+        return jsonify({
+            'message': 'Quote fully approved!',
+            'status': 'Approved'
+        })
     
-    return jsonify({'message': 'Approval updated successfully'})
+    return jsonify({
+        'message': 'Approval updated successfully',
+        'required_sequence': required_approvals
+    })
 
 @app.route('/api/quote/<int:quote_id>/recall', methods=['POST'])
 def recall_quote(quote_id):
@@ -326,13 +368,12 @@ def recall_quote(quote_id):
     # Update quote status
     quotes.update({'status': 'Recalled'}, doc_ids=[quote_id])
     
-    # Reset all approvals to pending but preserve previous approval references and original status
+    # Mark all approvals as historical
     quote_approvals = approvals.search(Approval.quote_id == quote_id)
     for approval in quote_approvals:
         approvals.update({
-            'status': 'Pending',
-            'updated_at': datetime.now().isoformat(),
-            'original_status': approval['status']  # Store the original status
+            'historical': True,
+            'updated_at': datetime.now().isoformat()
         }, doc_ids=[approval.doc_id])
     
     return jsonify({
