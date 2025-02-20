@@ -353,7 +353,13 @@ def recall_quote(quote_id):
     if not quote:
         return jsonify({'message': 'Quote not found'}), 404
     
-    # Update quote status
+    # Check if quote is in a state that can be recalled
+    if quote.get('status') not in ['Pending', 'Approved']:
+        return jsonify({
+            'message': 'Quote cannot be recalled. Only pending or approved quotes can be recalled.'
+        }), 400
+    
+    # Update quote status to Recalled
     quotes.update({'status': 'Recalled'}, doc_ids=[quote_id])
     
     # Mark all approvals as historical

@@ -112,14 +112,29 @@ function App() {
     console.log('==========================================');
     console.log('updateQuoteStatus called');
     console.log('Current approvals:', currentApprovals);
+    console.log('Current quote status:', quoteData.status);
     
     if (!currentApprovals.length) {
       console.log('No approvals to process');
       return;
     }
 
-    const allApproved = currentApprovals.every(approval => approval.status === 'Approved');
-    const anyRejected = currentApprovals.some(approval => approval.status === 'Rejected');
+    // Don't update status if quote is recalled or if all approvals are historical
+    if (quoteData.status === QUOTE_STATUS.RECALLED || currentApprovals.every(approval => approval.historical)) {
+      console.log('Quote is recalled or all approvals are historical, not updating status');
+      return;
+    }
+
+    // Only consider non-historical approvals for status updates
+    const activeApprovals = currentApprovals.filter(approval => !approval.historical);
+    
+    if (!activeApprovals.length) {
+      console.log('No active approvals to process');
+      return;
+    }
+
+    const allApproved = activeApprovals.every(approval => approval.status === 'Approved');
+    const anyRejected = activeApprovals.some(approval => approval.status === 'Rejected');
 
     console.log('All approved:', allApproved);
     console.log('Any rejected:', anyRejected);
@@ -410,13 +425,19 @@ function App() {
         method: 'POST'
       });
       const data = await response.json();
-      if (data.previous_values) {
-        setQuoteData({ ...data.previous_values, status: QUOTE_STATUS.RECALLED });
-        fetchQuoteData();
-        setMessage({ type: 'success', text: 'Quote recalled successfully' });
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Error recalling quote');
       }
+      
+      setQuoteData(prev => ({ ...prev, status: QUOTE_STATUS.RECALLED }));
+      setMessage({ type: 'success', text: 'Quote recalled successfully' });
+      
+      // Fetch latest data to ensure we have the correct state
+      await fetchQuoteData();
     } catch (error) {
-      setMessage({ type: 'error', text: 'Error recalling quote' });
+      console.error('Error recalling quote:', error);
+      setMessage({ type: 'error', text: `Error recalling quote: ${error.message}` });
     }
   };
 
